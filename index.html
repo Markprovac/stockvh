@@ -241,10 +241,17 @@ async function startCamera() {
       qrbox: 250,
       ...(hasFormats ? {
         formatsToSupport: [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39
+           Html5QrcodeSupportedFormats.QR_CODE,        // QR codes (Asie, logistique)
+      Html5QrcodeSupportedFormats.EAN_13,         // Europe, Asie
+      Html5QrcodeSupportedFormats.EAN_8,          // Petits emballages
+      Html5QrcodeSupportedFormats.UPC_A,          // États-Unis
+      Html5QrcodeSupportedFormats.UPC_E,          // États-Unis version compacte
+      Html5QrcodeSupportedFormats.CODE_128,       // Transport, logistique, entrepôts
+      Html5QrcodeSupportedFormats.CODE_39,        // Industrie, étiquettes techniques
+      Html5QrcodeSupportedFormats.ITF,            // Palettes, cartons
+      Html5QrcodeSupportedFormats.DATA_MATRIX,    // Médical, électronique
+      Html5QrcodeSupportedFormats.AZTEC,          // Billets, transports (SNCF, avions)
+      Html5QrcodeSupportedFormats.PDF_417         // Documents officiels (cartes ID, permis)
         ]
       } : {})
     };
@@ -351,3 +358,4 @@ loadInventory();
 
 </body>
 </html>
+
