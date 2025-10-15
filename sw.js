@@ -1,5 +1,5 @@
 // sw.js — cache statique + fallback réseau
-const CACHE = "stock-vehicule-v3";
+const CACHE = "stock-vehicule-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -39,5 +39,6 @@ self.addEventListener("fetch", (e) => {
     );
   }
 });
+
 
 
