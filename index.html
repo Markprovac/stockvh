@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Application de gestion de stock pour véhicules">
+  <meta name="theme-color" content="#1e3a8a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Stock Véhicule</title>
+
+  <!-- Fallback scanner (Safari / anciens navigateurs) -->
+  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+
+  <style>
+    /* ====== RESET & BASE ====== */
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+    .hidden{display:none!important}
+
+    /* ====== HOME ====== */
+    #home{min-height:100vh;background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%);padding:24px}
+    .container{max-width:448px;margin:0 auto}
+    .header{text-align:center;margin-bottom:32px;color:white}
+    .icon-large{width:80px;height:80px;margin:0 auto 16px}
+    h1{font-size:1.875rem;font-weight:bold;margin-bottom:8px}
+    .subtitle{color:#bfdbfe}
+    .button-group{display:flex;flex-direction:column;gap:16px}
+    .btn{width:100%;padding:24px;font-size:1.25rem;font-weight:bold;border:none;border-radius:12px;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;transition:.2s;
+      box-shadow:0 4px 6px rgba(0,0,0,.1)}
+    .btn:hover{transform:scale(1.05)}
+    .btn-entry{background:#22c55e;color:white}.btn-entry:hover{background:#16a34a}
+    .btn-exit{background:#ef4444;color:white}.btn-exit:hover{background:#dc2626}
+    .btn-inventory{background:white;color:#1e3a8a}.btn-inventory:hover{background:#f3f4f6}
+    .stats{margin-top:32px;text-align:center;color:#bfdbfe;font-size:.875rem}
+
+    /* ====== SCAN ====== */
+    #scan{min-height:100vh;background:#111827;color:white;padding:16px}
+    .scan-header{display:flex;justify-content:space-between;align-items:center}
+    .scan-title{font-size:1.5rem;font-weight:bold}
+    .btn-close{background:#ef4444;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .btn-close:hover{background:#dc2626}
+    #reader{width:100%;max-width:400px;margin:20px auto}
+
+    .manual-input{background:#1f2937;padding:24px;border-radius:8px;margin-top:16px}
+    .manual-input h3{font-size:1.125rem;margin-bottom:16px}
+    .input-field{width:100%;background:#374151;color:white;border:none;padding:12px 16px;
+      border-radius:8px;margin-bottom:16px;font-size:1rem}
+    .input-field:focus{outline:2px solid #3b82f6}
+    .quantity-control{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+    .btn-qty{background:#374151;color:white;border:none;padding:8px;border-radius:8px;cursor:pointer}
+    .btn-qty:hover{background:#4b5563}
+    .qty-input{width:80px;background:#374151;color:white;border:none;padding:8px 12px;border-radius:8px;
+      text-align:center;font-size:1rem}
+    .btn-submit{width:100%;padding:12px 24px;font-weight:bold;border:none;border-radius:8px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px}
+
+    /* ====== INVENTORY ====== */
+    #inventory{min-height:100vh;background:#f9fafb}
+    .inventory-header{background:#1e3a8a;color:white;padding:16px}
+    .inventory-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .inventory-title{font-size:1.5rem;font-weight:bold}
+    .btn-back{background:white;color:#1e3a8a;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    .btn-back:hover{background:#f3f4f6}
+    .search-area{padding:16px}
+    .search{width:100%;max-width:448px;margin:0 auto}
+    .search input{width:100%;padding:12px;border-radius:8px;border:1px solid #e5e7eb;font-size:1rem}
+    .empty{max-width:448px;margin:32px auto;text-align:center;color:#6b7280}
+    .list{max-width:448px;margin:16px auto 64px}
+    .inventory-item{display:flex;align-items:center;justify-content:space-between;background:white;
+      border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px}
+    .item-code{font-family:monospace;font-weight:600;color:#111827}
+    .item-qty{background:#dbeafe;color:#1e3a8a;font-weight:bold;padding:8px 16px;border-radius:8px}
+  </style>
+</head>
+
+<body>
+  <!-- Page d'accueil -->
+  <div id="home">
+    <div class="container">
+      <div class="header">
+        <svg class="icon-large" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        <h1>Stock Véhicule</h1>
+        <p class="subtitle">Gestion simplifiée de votre inventaire</p>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-entry" onclick="showScan('entry')">ENTRÉES</button>
+        <button class="btn btn-exit"  onclick="showScan('exit')">SORTIES</button>
+        <button class="btn btn-inventory" onclick="showInventory()">INVENTAIRE</button>
+      </div>
+
+      <div class="stats">
+        <p><span id="refCount">0</span> références en stock</p>
+        <p><span id="totalCount">0</span> pièces au total</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page scan -->
+  <div id="scan" class="hidden">
+    <div class="container">
+      <div class="scan-header">
+        <div class="scan-title">Scanner — <span id="modeLabel">Entrées</span></div>
+        <button class="btn-close" onclick="showHome()">Fermer</button>
+      </div>
+
+      <!-- Zone vidéo / fallback scanner -->
+      <div id="reader"></div>
+
+      <!-- Saisie manuelle (choix 1 : on ne valide que quand tu cliques) -->
+      <div class="manual-input">
+        <h3>Code scanné ou saisie manuelle</h3>
+        <input id="manualInput" class="input-field" type="text" placeholder="Entrer / scanner un code-barres...">
+        <div class="quantity-control">
+          <button class="btn-qty" onclick="chgQty(-1)">−</button>
+          <input id="quantity" class="qty-input" type="number" min="1" value="1" inputmode="numeric" pattern="[0-9]*">
+          <button class="btn-qty" onclick="chgQty(1)">+</button>
+        </div>
+        <!-- couleur bouton dépend du mode -->
+        <button id="btnValidate" class="btn-submit" style="background:#22c55e;color:white" onclick="handleSubmit()">
+          Valider
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page inventaire -->
+  <div id="inventory" class="hidden">
+    <div class="inventory-header">
+      <div class="inventory-top container">
+        <div class="inventory-title">Inventaire</div>
+        <button class="btn-back" onclick="showHome()">Accueil</button>
+      </div>
+    </div>
+    <div class="search-area">
+      <div class="search">
+        <input id="searchInput" type="search" placeholder="Rechercher un code..." oninput="filterInventory()">
+      </div>
+    </div>
+    <div class="container">
+      <div id="emptyState" class="empty hidden">Aucun élément ne correspond à la recherche.</div>
+      <div id="inventoryList" class="list"></div>
+    </div>
+  </div>
+
+  <script>
+    /* =============================
+     *   ÉTAT + SAUVEGARDE (debounce)
+     * ============================= */
+    let inventory = {};
+    let currentMode = null;       // 'entry' | 'exit'
+    let html5QrCode = null;       // instance fallback
+    let barcodeStream = null;     // flux MediaStream (BarcodeDetector)
+
+    // simple debounce
+    function debounce(fn, wait=500){
+      let t;
+      return (...args)=>{
+        clearTimeout(t);
+        t = setTimeout(()=>fn(...args), wait);
+      };
+    }
+
+    function loadInventory() {
+      try {
+        const saved = localStorage.getItem('partsInventory');
+        if (saved) inventory = JSON.parse(saved) || {};
+      } catch(_) { inventory = {}; }
+      updateStats();
+    }
+
+    const saveInventoryNow = () => {
+      localStorage.setItem('partsInventory', JSON.stringify(inventory));
+      updateStats();
+      if (!document.getElementById('inventory').classList.contains('hidden')) {
+        displayInventory();
+      }
+    };
+    const saveInventory = debounce(saveInventoryNow, 500);
+
+    function updateStats() {
+      const refCount = Object.keys(inventory).length;
+      const totalCount = Object.values(inventory).reduce((a,b)=>a+b,0);
+      document.getElementById('refCount').textContent = refCount;
+      document.getElementById('totalCount').textContent = totalCount;
+    }
+
+    /* =============================
+     *          NAVIGATION
+     * ============================= */
+    function showHome(){
+      document.getElementById('home').classList.remove('hidden');
+      document.getElementById('scan').classList.add('hidden');
+      document.getElementById('inventory').classList.add('hidden');
+      stopCamera();
+    }
+
+    function showScan(mode){
+      currentMode = mode;
+      document.getElementById('home').classList.add('hidden');
+      document.getElementById('scan').classList.remove('hidden');
+      document.getElementById('inventory').classList.add('hidden');
+
+      // label + couleur bouton
+      const isEntry = (mode === 'entry');
+      document.getElementById('modeLabel').textContent = isEntry ? 'Entrées' : 'Sorties';
+      const btn = document.getElementById('btnValidate');
+      if (isEntry) { btn.style.background = '#22c55e'; btn.style.color = '#fff'; }
+      else { btn.style.background = '#ef4444'; btn.style.color = '#fff'; }
+
+      startCamera();
+    }
+
+    function showInventory(){
+      document.getElementById('home').classList.add('hidden');
+      document.getElementById('scan').classList.add('hidden');
+      document.getElementById('inventory').classList.remove('hidden');
+      stopCamera();
+      displayInventory();
+    }
+
+    /* =============================
+     *        SCAN CAMÉRA
+     *  - priorité BarcodeDetector
+     *  - fallback html5-qrcode
+     * ============================= */
+    async function startCamera() {
+      const readerDiv = document.getElementById("reader");
+      const output = document.getElementById("manualInput");
+
+      // nettoyage
+      await stopCamera();
+      readerDiv.innerHTML = "";
+
+      // 1) Navigation moderne : BarcodeDetector (Chrome/Android)
+      if ("BarcodeDetector" in window) {
+        const formats = ["qr_code","ean_13","code_128","code_39"];
+        const detector = new BarcodeDetector({ formats });
+
+        const video = document.createElement("video");
+        video.playsInline = true; video.muted = true; video.autoplay = true;
+        video.style.width = "100%"; video.style.borderRadius = "8px";
+        readerDiv.appendChild(video);
+
+        try {
+          barcodeStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } }
+          });
+          video.srcObject = barcodeStream;
+
+          // attendre que la vidéo soit prête
+          await new Promise((res) => {
+            video.onloadedmetadata = () => {
+              video.play().then(res).catch(res);
+            };
+          });
+
+          let running = true;
+          const scan = async () => {
+            if (!running || !barcodeStream || !barcodeStream.active) return;
+            try {
+              const barcodes = await detector.detect(video);
+              if (barcodes && barcodes.length) {
+                const code = barcodes[0].rawValue || "";
+                if (code) {
+                  output.value = code; // ➜ saisie manuelle : on n’ajoute pas automatiquement
+                  alert("✅ Code détecté : " + code);
+                  await stopCamera();
+                  return;
+                }
+              }
+            } catch(_) { /* frame error, on continue */ }
+            requestAnimationFrame(scan);
+          };
+          scan();
+          return; // pas de fallback si BarcodeDetector OK
+        } catch (err) {
+          console.warn("BarcodeDetector failed, fallback to html5-qrcode:", err);
+          // on continue vers fallback
+        }
+      }
+
+      // 2) Fallback html5-qrcode (iOS/Safari et anciens)
+      try {
+        const hasFormats = typeof window.Html5QrcodeSupportedFormats !== "undefined";
+        const config = {
+          fps: 10,
+          qrbox: 250,
+          ...(hasFormats ? {
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39
+            ]
+          } : {}) // si non dispo, au moins QR_CODE
+        };
+
+        html5QrCode = new Html5Qrcode("reader");
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText) => {
+            // ➜ saisie manuelle, pas d’ajout auto
+            document.getElementById("manualInput").value = decodedText;
+            alert("✅ Code détecté : " + decodedText);
+            stopCamera();
+          }
+        );
+      } catch (err) {
+        alert("Erreur caméra (html5-qrcode): " + err);
+      }
+    }
+
+    async function stopCamera() {
+      // couper html5-qrcode si actif
+      if (html5QrCode) {
+        try { await html5QrCode.stop(); } catch(_) {}
+        try { await html5QrCode.clear(); } catch(_) {}
+        html5QrCode = null;
+      }
+      // couper flux natif
+      if (barcodeStream) {
+        try { barcodeStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+        barcodeStream = null;
+      }
+      const readerDiv = document.getElementById("reader");
+      if (readerDiv) readerDiv.innerHTML = "";
+    }
+
+    /* =============================
+     *     SAISIE / VALIDATION
+     * ============================= */
+    function chgQty(delta){
+      const q = document.getElementById('quantity');
+      const v = Math.max(1, (parseInt(q.value||'1',10)+delta));
+      q.value = v;
+    }
+
+    function handleSubmit(){
+      const code = (document.getElementById('manualInput').value || '').trim();
+      const qty = Math.max(1, parseInt(document.getElementById('quantity').value||'1',10));
+      if(!code){ alert("Saisis ou scanne un code d’abord."); return; }
+      if(!currentMode){ alert("Choisis Entrées ou Sorties."); return; }
+
+      if(currentMode==='entry'){
+        inventory[code] = (inventory[code] || 0) + qty;
+      } else {
+        const newQty = (inventory[code] || 0) - qty;
+        if(newQty <= 0) delete inventory[code];
+        else inventory[code] = newQty;
+      }
+      saveInventory(); // debounce 500 ms
+      resetForm();
+    }
+
+    function resetForm(){
+      document.getElementById('manualInput').value='';
+      document.getElementById('quantity').value=1;
+    }
+
+    /* =============================
+     *        INVENTAIRE LISTE
+     * ============================= */
+    function displayInventory(){
+      const search = (document.getElementById('searchInput').value || '').toLowerCase();
+      const list = document.getElementById('inventoryList');
+      const empty = document.getElementById('emptyState');
+
+      const filtered = Object.entries(inventory)
+        .filter(([code]) => code.toLowerCase().includes(search))
+        .sort(([a],[b]) => a.localeCompare(b));
+
+      if(!filtered.length){
+        empty.classList.remove('hidden');
+        list.innerHTML = '';
+        return;
+      }
+      empty.classList.add('hidden');
+      list.innerHTML = filtered.map(([c,q]) => `
+        <div class="inventory-item">
+          <div class="item-code">${c}</div>
+          <div class="item-qty">${q}</div>
+        </div>
+      `).join('');
+    }
+    function filterInventory(){ displayInventory(); }
+
+    /* =============================
+     *        SERVICE WORKER
+     * ============================= */
+    if('serviceWorker' in navigator){
+      window.addEventListener('load',()=>{
+        navigator.serviceWorker.register('./sw.js').catch(console.warn);
+      });
+    }
+
+    // Init
+    loadInventory();
+  </script>
+</body>
+</html>
