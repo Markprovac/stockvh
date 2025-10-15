@@ -10,8 +10,8 @@
   <title>Stock Véhicule</title>
 
   <!-- Fallback scanner (Safari / anciens navigateurs) -->
+  
  <script src="https://unpkg.com/html5-qrcode"></script>
-
   <style>
     /* ====== RESET & BASE ====== */
     *{margin:0;padding:0;box-sizing:border-box}
@@ -149,260 +149,205 @@
   </div>
 
   <script>
-    /* =============================
-     *   ÉTAT + SAUVEGARDE (debounce)
-     * ============================= */
-    let inventory = {};
-    let currentMode = null;       // 'entry' | 'exit'
-    let html5QrCode = null;       // instance fallback
-    let barcodeStream = null;     // flux MediaStream (BarcodeDetector)
+/* =============================
+ *   ÉTAT + SAUVEGARDE (debounce)
+ * ============================= */
+let inventory = {};
+let currentMode = null;       // 'entry' | 'exit'
+let html5QrCode = null;       // instance html5-qrcode
+let barcodeStream = null;     // flux MediaStream (non utilisé ici)
 
-    // simple debounce
-    function debounce(fn, wait=500){
-      let t;
-      return (...args)=>{
-        clearTimeout(t);
-        t = setTimeout(()=>fn(...args), wait);
-      };
-    }
+function debounce(fn, wait=500){
+  let t;
+  return (...args)=>{
+    clearTimeout(t);
+    t = setTimeout(()=>fn(...args), wait);
+  };
+}
 
-    function loadInventory() {
-      try {
-        const saved = localStorage.getItem('partsInventory');
-        if (saved) inventory = JSON.parse(saved) || {};
-      } catch(_) { inventory = {}; }
-      updateStats();
-    }
+function loadInventory() {
+  try {
+    const saved = localStorage.getItem('partsInventory');
+    if (saved) inventory = JSON.parse(saved) || {};
+  } catch(_) { inventory = {}; }
+  updateStats();
+}
 
-    const saveInventoryNow = () => {
-      localStorage.setItem('partsInventory', JSON.stringify(inventory));
-      updateStats();
-      if (!document.getElementById('inventory').classList.contains('hidden')) {
-        displayInventory();
-      }
+const saveInventoryNow = () => {
+  localStorage.setItem('partsInventory', JSON.stringify(inventory));
+  updateStats();
+  if (!document.getElementById('inventory').classList.contains('hidden')) {
+    displayInventory();
+  }
+};
+const saveInventory = debounce(saveInventoryNow, 500);
+
+function updateStats() {
+  const refCount = Object.keys(inventory).length;
+  const totalCount = Object.values(inventory).reduce((a,b)=>a+b,0);
+  document.getElementById('refCount').textContent = refCount;
+  document.getElementById('totalCount').textContent = totalCount;
+}
+
+/* =============================
+ *          NAVIGATION
+ * ============================= */
+function showHome(){
+  document.getElementById('home').classList.remove('hidden');
+  document.getElementById('scan').classList.add('hidden');
+  document.getElementById('inventory').classList.add('hidden');
+  stopCamera();
+}
+
+function showScan(mode){
+  currentMode = mode;
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('scan').classList.remove('hidden');
+  document.getElementById('inventory').classList.add('hidden');
+
+  // label + couleur bouton
+  const isEntry = (mode === 'entry');
+  document.getElementById('modeLabel').textContent = isEntry ? 'Entrées' : 'Sorties';
+  const btn = document.getElementById('btnValidate');
+  if (isEntry) { btn.style.background = '#22c55e'; btn.style.color = '#fff'; }
+  else { btn.style.background = '#ef4444'; btn.style.color = '#fff'; }
+
+  startCamera();
+}
+
+function showInventory(){
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('scan').classList.add('hidden');
+  document.getElementById('inventory').classList.remove('hidden');
+  stopCamera();
+  displayInventory();
+}
+
+/* =============================
+ *        SCAN CAMÉRA
+ *  (Forcé en mode html5-qrcode)
+ * ============================= */
+async function startCamera() {
+  const readerDiv = document.getElementById("reader");
+  const output = document.getElementById("manualInput");
+
+  await stopCamera(); // nettoyage
+  readerDiv.innerHTML = "";
+
+  try {
+    const hasFormats = typeof window.Html5QrcodeSupportedFormats !== "undefined";
+    const config = {
+      fps: 10,
+      qrbox: 250,
+      ...(hasFormats ? {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39
+        ]
+      } : {})
     };
-    const saveInventory = debounce(saveInventoryNow, 500);
 
-    function updateStats() {
-      const refCount = Object.keys(inventory).length;
-      const totalCount = Object.values(inventory).reduce((a,b)=>a+b,0);
-      document.getElementById('refCount').textContent = refCount;
-      document.getElementById('totalCount').textContent = totalCount;
-    }
-
-    /* =============================
-     *          NAVIGATION
-     * ============================= */
-    function showHome(){
-      document.getElementById('home').classList.remove('hidden');
-      document.getElementById('scan').classList.add('hidden');
-      document.getElementById('inventory').classList.add('hidden');
-      stopCamera();
-    }
-
-    function showScan(mode){
-      currentMode = mode;
-      document.getElementById('home').classList.add('hidden');
-      document.getElementById('scan').classList.remove('hidden');
-      document.getElementById('inventory').classList.add('hidden');
-
-      // label + couleur bouton
-      const isEntry = (mode === 'entry');
-      document.getElementById('modeLabel').textContent = isEntry ? 'Entrées' : 'Sorties';
-      const btn = document.getElementById('btnValidate');
-      if (isEntry) { btn.style.background = '#22c55e'; btn.style.color = '#fff'; }
-      else { btn.style.background = '#ef4444'; btn.style.color = '#fff'; }
-
-      startCamera();
-    }
-
-    function showInventory(){
-      document.getElementById('home').classList.add('hidden');
-      document.getElementById('scan').classList.add('hidden');
-      document.getElementById('inventory').classList.remove('hidden');
-      stopCamera();
-      displayInventory();
-    }
-
-    /* =============================
-     *        SCAN CAMÉRA
-     *  - priorité BarcodeDetector
-     *  - fallback html5-qrcode
-     * ============================= */
-    async function startCamera() {
-      const readerDiv = document.getElementById("reader");
-      const output = document.getElementById("manualInput");
-
-      // nettoyage
-      await stopCamera();
-      readerDiv.innerHTML = "";
-
-      // 1) Navigation moderne : BarcodeDetector (Chrome/Android)
-      if ("BarcodeDetector" in window) {
-        const formats = ["qr_code","ean_13","code_128","code_39"];
-        const detector = new BarcodeDetector({ formats });
-
-        const video = document.createElement("video");
-        video.playsInline = true; video.muted = true; video.autoplay = true;
-        video.style.width = "100%"; video.style.borderRadius = "8px";
-        readerDiv.appendChild(video);
-
-        try {
-          barcodeStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } }
-          });
-          video.srcObject = barcodeStream;
-
-          // attendre que la vidéo soit prête
-          await new Promise((res) => {
-            video.onloadedmetadata = () => {
-              video.play().then(res).catch(res);
-            };
-          });
-
-          let running = true;
-          const scan = async () => {
-            if (!running || !barcodeStream || !barcodeStream.active) return;
-            try {
-              const barcodes = await detector.detect(video);
-              if (barcodes && barcodes.length) {
-                const code = barcodes[0].rawValue || "";
-                if (code) {
-                  output.value = code; // ➜ saisie manuelle : on n’ajoute pas automatiquement
-                  alert("✅ Code détecté : " + code);
-                  await stopCamera();
-                  return;
-                }
-              }
-            } catch(_) { /* frame error, on continue */ }
-            requestAnimationFrame(scan);
-          };
-          scan();
-          return; // pas de fallback si BarcodeDetector OK
-        } catch (err) {
-          console.warn("BarcodeDetector failed, fallback to html5-qrcode:", err);
-          // on continue vers fallback
-        }
+    html5QrCode = new Html5Qrcode("reader");
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        document.getElementById("manualInput").value = decodedText;
+        alert("✅ Code détecté : " + decodedText);
+        stopCamera();
       }
+    );
+  } catch (err) {
+    alert("Erreur caméra (html5-qrcode): " + err);
+  }
+}
 
-      // 2) Fallback html5-qrcode (iOS/Safari et anciens)
-      try {
-        const hasFormats = typeof window.Html5QrcodeSupportedFormats !== "undefined";
-        const config = {
-          fps: 10,
-          qrbox: 250,
-          ...(hasFormats ? {
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.QR_CODE,
-              Html5QrcodeSupportedFormats.EAN_13,
-              Html5QrcodeSupportedFormats.CODE_128,
-              Html5QrcodeSupportedFormats.CODE_39
-            ]
-          } : {}) // si non dispo, au moins QR_CODE
-        };
+async function stopCamera() {
+  if (html5QrCode) {
+    try { await html5QrCode.stop(); } catch(_) {}
+    try { await html5QrCode.clear(); } catch(_) {}
+    html5QrCode = null;
+  }
+  if (barcodeStream) {
+    try { barcodeStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+    barcodeStream = null;
+  }
+  const readerDiv = document.getElementById("reader");
+  if (readerDiv) readerDiv.innerHTML = "";
+}
 
-        html5QrCode = new Html5Qrcode("reader");
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          config,
-          (decodedText) => {
-            // ➜ saisie manuelle, pas d’ajout auto
-            document.getElementById("manualInput").value = decodedText;
-            alert("✅ Code détecté : " + decodedText);
-            stopCamera();
-          }
-        );
-      } catch (err) {
-        alert("Erreur caméra (html5-qrcode): " + err);
-      }
-    }
+/* =============================
+ *     SAISIE / VALIDATION
+ * ============================= */
+function chgQty(delta){
+  const q = document.getElementById('quantity');
+  const v = Math.max(1, (parseInt(q.value||'1',10)+delta));
+  q.value = v;
+}
 
-    async function stopCamera() {
-      // couper html5-qrcode si actif
-      if (html5QrCode) {
-        try { await html5QrCode.stop(); } catch(_) {}
-        try { await html5QrCode.clear(); } catch(_) {}
-        html5QrCode = null;
-      }
-      // couper flux natif
-      if (barcodeStream) {
-        try { barcodeStream.getTracks().forEach(t => t.stop()); } catch(_) {}
-        barcodeStream = null;
-      }
-      const readerDiv = document.getElementById("reader");
-      if (readerDiv) readerDiv.innerHTML = "";
-    }
+function handleSubmit(){
+  const code = (document.getElementById('manualInput').value || '').trim();
+  const qty = Math.max(1, parseInt(document.getElementById('quantity').value||'1',10));
+  if(!code){ alert("Saisis ou scanne un code d’abord."); return; }
+  if(!currentMode){ alert("Choisis Entrées ou Sorties."); return; }
 
-    /* =============================
-     *     SAISIE / VALIDATION
-     * ============================= */
-    function chgQty(delta){
-      const q = document.getElementById('quantity');
-      const v = Math.max(1, (parseInt(q.value||'1',10)+delta));
-      q.value = v;
-    }
+  if(currentMode==='entry'){
+    inventory[code] = (inventory[code] || 0) + qty;
+  } else {
+    const newQty = (inventory[code] || 0) - qty;
+    if(newQty <= 0) delete inventory[code];
+    else inventory[code] = newQty;
+  }
+  saveInventory(); // debounce 500 ms
+  resetForm();
+}
 
-    function handleSubmit(){
-      const code = (document.getElementById('manualInput').value || '').trim();
-      const qty = Math.max(1, parseInt(document.getElementById('quantity').value||'1',10));
-      if(!code){ alert("Saisis ou scanne un code d’abord."); return; }
-      if(!currentMode){ alert("Choisis Entrées ou Sorties."); return; }
+function resetForm(){
+  document.getElementById('manualInput').value='';
+  document.getElementById('quantity').value=1;
+}
 
-      if(currentMode==='entry'){
-        inventory[code] = (inventory[code] || 0) + qty;
-      } else {
-        const newQty = (inventory[code] || 0) - qty;
-        if(newQty <= 0) delete inventory[code];
-        else inventory[code] = newQty;
-      }
-      saveInventory(); // debounce 500 ms
-      resetForm();
-    }
+/* =============================
+ *        INVENTAIRE LISTE
+ * ============================= */
+function displayInventory(){
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  const list = document.getElementById('inventoryList');
+  const empty = document.getElementById('emptyState');
 
-    function resetForm(){
-      document.getElementById('manualInput').value='';
-      document.getElementById('quantity').value=1;
-    }
+  const filtered = Object.entries(inventory)
+    .filter(([code]) => code.toLowerCase().includes(search))
+    .sort(([a],[b]) => a.localeCompare(b));
 
-    /* =============================
-     *        INVENTAIRE LISTE
-     * ============================= */
-    function displayInventory(){
-      const search = (document.getElementById('searchInput').value || '').toLowerCase();
-      const list = document.getElementById('inventoryList');
-      const empty = document.getElementById('emptyState');
+  if(!filtered.length){
+    empty.classList.remove('hidden');
+    list.innerHTML = '';
+    return;
+  }
+  empty.classList.add('hidden');
+  list.innerHTML = filtered.map(([c,q]) => `
+    <div class="inventory-item">
+      <div class="item-code">${c}</div>
+      <div class="item-qty">${q}</div>
+    </div>
+  `).join('');
+}
+function filterInventory(){ displayInventory(); }
 
-      const filtered = Object.entries(inventory)
-        .filter(([code]) => code.toLowerCase().includes(search))
-        .sort(([a],[b]) => a.localeCompare(b));
+/* =============================
+ *        SERVICE WORKER
+ * ============================= */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  });
+}
 
-      if(!filtered.length){
-        empty.classList.remove('hidden');
-        list.innerHTML = '';
-        return;
-      }
-      empty.classList.add('hidden');
-      list.innerHTML = filtered.map(([c,q]) => `
-        <div class="inventory-item">
-          <div class="item-code">${c}</div>
-          <div class="item-qty">${q}</div>
-        </div>
-      `).join('');
-    }
-    function filterInventory(){ displayInventory(); }
+// Init
+loadInventory();
+</script>
 
-    /* =============================
-     *        SERVICE WORKER
-     * ============================= */
-    if('serviceWorker' in navigator){
-      window.addEventListener('load',()=>{
-        navigator.serviceWorker.register('./sw.js').catch(console.warn);
-      });
-    }
-
-    // Init
-    loadInventory();
-  </script>
 </body>
 </html>
-
