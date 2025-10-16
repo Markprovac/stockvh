@@ -12,6 +12,8 @@
   <!-- Fallback scanner (Safari / anciens navigateurs) -->
   
  <script src="https://unpkg.com/html5-qrcode"></script>
+ <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
   <style>
     /* ====== RESET & BASE ====== */
     *{margin:0;padding:0;box-sizing:border-box}
@@ -125,6 +127,10 @@
         <button id="btnValidate" class="btn-submit" style="background:#22c55e;color:white" onclick="handleSubmit()">
           Valider
         </button>
+		<button id="btnOCR" class="btn-submit" style="background:#3b82f6;color:white;margin-top:8px;" onclick="startOCR()">
+  OCR (Reconnaissance texte)
+</button>
+
       </div>
     </div>
   </div>
@@ -351,6 +357,45 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(console.warn);
   });
 }
+/* =============================
+ *      OCR (Tesseract.js)
+ * ============================= */
+async function startOCR() {
+  try {
+    // Demande la caméra
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    video.setAttribute("playsinline", "true");
+    await video.play();
+
+    // Création d’un canvas pour capturer une image
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Arrête la caméra
+    stream.getTracks().forEach(t => t.stop());
+
+    // OCR
+    alert("📷 Lecture du texte en cours...");
+    const result = await Tesseract.recognize(canvas, 'eng+fra', { logger: m => console.log(m) });
+    const text = result.data.text.trim();
+
+    if (text) {
+      document.getElementById("manualInput").value = text;
+      alert("✅ Texte reconnu : " + text.substring(0, 100));
+    } else {
+      alert("❌ Aucun texte détecté.");
+    }
+  } catch (err) {
+    alert("Erreur OCR : " + err);
+    console.error(err);
+  }
+}
+
 
 // Init
 loadInventory();
@@ -358,4 +403,3 @@ loadInventory();
 
 </body>
 </html>
-
